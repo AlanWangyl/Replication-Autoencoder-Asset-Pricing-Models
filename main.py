@@ -11,7 +11,7 @@ import numpy as np
 import time
 import json
 from tqdm import tqdm
-from utils import *
+import utils
 from analysis import *
 import matplotlib.pyplot as plt
 from itertools import product
