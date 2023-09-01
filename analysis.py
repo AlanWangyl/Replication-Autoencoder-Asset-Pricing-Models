@@ -97,11 +97,11 @@ def plot_R2_bar(R_df, type):
     
     R_df['Model'] = R_df[0].apply(lambda x: x.split('_')[0])
 
-    labels = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5', 'K=6']
-    FF = (R_df.loc[R_df['Model']=='FF'][1]*100).to_list()
-    PCA = (R_df.loc[R_df['Model']=='PCA'][1]*100).to_list()
-    IPCA = (R_df.loc[R_df['Model']=='IPCA'][1]*100).to_list()
-    CA0 = (R_df.loc[R_df['Model']=='CA0'][1]*100).to_list()
+    labels = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5']
+    #FF = (R_df.loc[R_df['Model']=='FF'][1]*100).to_list()
+    #PCA = (R_df.loc[R_df['Model']=='PCA'][1]*100).to_list()
+    #IPCA = (R_df.loc[R_df['Model']=='IPCA'][1]*100).to_list()
+    #CA0 = (R_df.loc[R_df['Model']=='CA0'][1]*100).to_list()
     CA1 = (R_df.loc[R_df['Model']=='CA1'][1]*100).to_list()
     CA2 = (R_df.loc[R_df['Model']=='CA2'][1]*100).to_list()
     CA3 = (R_df.loc[R_df['Model']=='CA3'][1]*100).to_list()
@@ -111,13 +111,13 @@ def plot_R2_bar(R_df, type):
     width = 0.11
 
     fig, ax = plt.subplots(figsize=(15, 5))
-    ax.bar(x - width*3 , FF, width, label='FF', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[1]))
-    ax.bar(x - width*2 , PCA, width, label='PCA', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[2]))
-    ax.bar(x - width , IPCA, width, label='IPCA', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
-    ax.bar(x + 0.00, CA0, width, label='CA0', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[4]))
-    ax.bar(x + width , CA1, width, label='CA1', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[5]))
-    ax.bar(x + width*2 , CA2, width, label='CA2', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[6]))
-    ax.bar(x + width*3 , CA3, width, label='CA3', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[7]))
+    #ax.bar(x - width*3 , FF, width, label='FF', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[1]))
+    #ax.bar(x - width*2 , PCA, width, label='PCA', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[2]))
+    #ax.bar(x - width , IPCA, width, label='IPCA', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
+    #ax.bar(x + 0.00, CA0, width, label='CA0', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[4]))
+    ax.bar(x + width , CA1, width, label='CA1', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[1]))
+    ax.bar(x + width*2 , CA2, width, label='CA2', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[2]))
+    ax.bar(x + width*3 , CA3, width, label='CA3', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
 
 
     ax.set_ylabel(f'Portfolio {type} R^2 (%)')
@@ -139,7 +139,7 @@ def plot_R2_table(R_df, type):
         R_df[col] = R_df[col].apply(lambda x: round_number(x))
 
     R_df = R_df.reset_index()
-    R_df.columns = ['Model', 'K=1', 'K=2', 'K=3', 'K=4', 'K=5', 'K=6']
+    R_df.columns = ['Model', 'K=1', 'K=2', 'K=3', 'K=4', 'K=5']
 
 
     fig_total =  ff.create_table(R_df,
@@ -166,11 +166,11 @@ def round_number(num):
 
     
 if __name__=="__main__":
-    CAs = ["CA0_1", "CA0_2", "CA0_3", "CA0_4", "CA0_5", "CA0_6", "CA1_1", "CA1_2", "CA1_3", "CA1_4", "CA1_5", "CA1_6", "CA2_1", "CA2_2", "CA2_3", "CA2_4", "CA2_5", "CA2_6", "CA3_1", "CA3_2", "CA3_3", "CA3_4", "CA3_5", "CA3_6"]
-    FFs = ["FF_1", "FF_2", "FF_3", "FF_4", "FF_5", "FF_6"]
-    PCAs = ["PCA_1", "PCA_2", "PCA_3", "PCA_4", "PCA_5", "PCA_6"]
-    IPCAs = ["IPCA_1", "IPCA_2", "IPCA_3", "IPCA_4", "IPCA_5", "IPCA_6"]
-    models = FFs + PCAs + IPCAs + CAs
+    CAs = ["CA1_1", "CA1_2", "CA1_3", "CA1_4", "CA1_5", "CA2_1", "CA2_2", "CA2_3", "CA2_4", "CA2_5", "CA3_1", "CA3_2", "CA3_3", "CA3_4", "CA3_5"]
+    #FFs = ["FF_1", "FF_2", "FF_3", "FF_4", "FF_5", "FF_6"]
+    #PCAs = ["PCA_1", "PCA_2", "PCA_3", "PCA_4", "PCA_5", "PCA_6"]
+    #IPCAs = ["IPCA_1", "IPCA_2", "IPCA_3", "IPCA_4", "IPCA_5", "IPCA_6"]
+    models = CAs
     
     ## Plot R^2 bars
     total_R2 = []
@@ -187,23 +187,23 @@ if __name__=="__main__":
     plot_R2_bar(R_pred, 'pred')
     
     ## Save R^2 tables
-    R_total_df = pd.DataFrame(np.array(total_R2).reshape(-1, 6), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5', 'K=6'], index=['FF', 'PCA', 'IPCA', 'CA0', 'CA1', 'CA2', 'CA3'])
-    R_pred_df = pd.DataFrame(np.array(predict_R2).reshape(-1, 6), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5', 'K=6'], index=['FF', 'PCA', 'IPCA', 'CA0', 'CA1', 'CA2', 'CA3'])
+    R_total_df = pd.DataFrame(np.array(total_R2).reshape(-1, 5), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5'], index=['CA1', 'CA2', 'CA3'])
+    R_pred_df = pd.DataFrame(np.array(predict_R2).reshape(-1, 5), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5'], index=['CA1', 'CA2', 'CA3'])
     
     plot_R2_table(R_total_df, 'total')
     plot_R2_table(R_pred_df, 'pred')  
     
     
     ## Plot characteristics importance heatmap
-    # models = ["IPCA", "CA0_5", "CA1_5", "CA2_5", "CA3_5"]
+    #models = ["CA1_5", "CA2_5", "CA3_5"]
     # #TODO: paste results from R_squares/
-    # R2_omit = []
-    # R_minus = pd.DataFrame(np.array(R2_omit).reshape(-1, 94)*100, index=models, columns=CHARAS_LIST).T
-    # char_ranks = R_minus.T.sum().argsort().argsort().index.to_list()
-    # char_ranks.reverse()
+   # R2_omit = []
+    #R_minus = pd.DataFrame(np.array(R2_omit).reshape(-1, 94)*100, index=models, columns=CHARAS_LIST).T
+    #char_ranks = R_minus.T.sum().argsort().argsort().index.to_list()
+    #char_ranks.reverse()
     
-    # plt.figure(figsize=(8, 15), dpi=200)
-    # sns.heatmap(R_minus.T[char_ranks].T, cmap='Blues', linewidths=0.6)
-    # plt.savefig('imgs/omit_char_R2_bias.png', bbox_inches='tight')
-    # plt.close()
+    #plt.figure(figsize=(8, 15), dpi=200)
+    #sns.heatmap(R_minus.T[char_ranks].T, cmap='Blues', linewidths=0.6)
+    #plt.savefig('imgs/omit_char_R2_bias.png', bbox_inches='tight')
+    #plt.close()
     

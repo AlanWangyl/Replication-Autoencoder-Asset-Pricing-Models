@@ -1,8 +1,8 @@
 import torch
-from models.PCA import PCA
-from models.FF import FF
-from models.IPCA import IPCA
-from models.CA import CA0, CA1, CA2, CA3
+#from models.PCA import PCA
+#from models.FF import FF
+#from models.IPCA import IPCA
+from models.CA import  CA1, CA2, CA3
 
 import gc
 import argparse
@@ -22,35 +22,35 @@ warnings.filterwarnings('ignore')
 
 
 
-def model_inference_and_predict(model):
-    """
-    Inference and Prediction of non NN models:
-    Returns: model.name_inference.csv & model.name_inference.csv saved in path 'results'
-    """
-    mon_list = pd.read_pickle('data/mon_list.pkl')
-    test_mons = mon_list.loc[mon_list >= model.test_period[0]]
-    inference_result = []
-    predict_result = []
-    T_bar = tqdm(test_mons.groupby(test_mons.apply(lambda x: x//10000)), colour='red', desc=f'{model.name} Inferencing & Predicting')
+#def model_inference_and_predict(model):
+    #"""
+    #Inference and Prediction of non NN models:
+    #Returns: model.name_inference.csv & model.name_inference.csv saved in path 'results'
+    #"""
+   # mon_list = pd.read_pickle('data/mon_list.pkl')
+    #test_mons = mon_list.loc[mon_list >= model.test_period[0]]
+    #inference_result = []
+    #predict_result = []
+    #T_bar = tqdm(test_mons.groupby(test_mons.apply(lambda x: x//10000)), colour='red', desc=f'{model.name} Inferencing & Predicting')
     
-    for g in T_bar: # rolling train
-        T_bar.set_postfix({'Year': g[0]})
-        model.train_model()
+    #for g in T_bar: # rolling train
+        #T_bar.set_postfix({'Year': g[0]})
+        #model.train_model()
         
-        for m in g[1].to_list():
-            inference_result.append(model.inference(m)) # T * N * m 
-            if not len(model.omit_char):
-                predict_result.append(model.predict(m))
+        #for m in g[1].to_list():
+            #inference_result.append(model.inference(m)) # T * N * m
+            #if not len(model.omit_char):
+                #predict_result.append(model.predict(m))
         # model refit (change train period and valid period)
-        model.refit()
+        #model.refit()
     
-    if not len(model.omit_char):
-        inference_result = pd.DataFrame(inference_result, index=test_mons, columns=CHARAS_LIST)
-        inference_result.to_csv(f'results/inference/{model.name}_inference.csv')
-        predict_result = pd.DataFrame(predict_result, index=test_mons, columns=CHARAS_LIST)
-        predict_result.to_csv(f'results/predict/{model.name}_predict.csv')
+    #if not len(model.omit_char):
+        #inference_result = pd.DataFrame(inference_result, index=test_mons, columns=CHARAS_LIST)
+        #inference_result.to_csv(f'results/inference/{model.name}_inference.csv')
+        #predict_result = pd.DataFrame(predict_result, index=test_mons, columns=CHARAS_LIST)
+        #predict_result.to_csv(f'results/predict/{model.name}_predict.csv')
     
-    return inference_result
+    #return inference_result
     
     
     
@@ -134,37 +134,37 @@ def git_push(msg):
 
 
 def model_selection(model_type, model_K, omit_char=[]):
-    assert model_type in ['FF', 'PCA', 'IPCA', 'CA0', 'CA1', 'CA2', 'CA3'], f'No Such Model: {model_type}'
+    assert model_type in ['CA1', 'CA2', 'CA3'],f'No Such Model: {model_type}'
     
-    if model_type == 'FF':
-        return {
-            'name': f'FF_{model_K}',
-            'omit_char': [],
-            'model': FF(K=model_K)
-        } 
+    #if model_type == 'FF':
+        #return {
+            #'name': f'FF_{model_K}',
+            #'omit_char': [],
+            #'model': FF(K=model_K)
+        #}
             
-    elif model_type == 'PCA':
-        return {
-            'name': f'PCA_{model_K}',
-            'omit_char': omit_char,
-            'model': PCA(K=model_K, omit_char=omit_char)
-        } 
+    #elif model_type == 'PCA':
+        #return {
+            #'name': f'PCA_{model_K}',
+            #'omit_char': omit_char,
+            #'model': PCA(K=model_K, omit_char=omit_char)
+        #}
         
-    elif model_type == 'IPCA':
-        return {
-            'name': f'IPCA_{model_K}',
-            'omit_char': omit_char,
-            'model': IPCA(K=model_K, omit_char=omit_char)
-        } 
+    #elif model_type == 'IPCA':
+        #return {
+            #'name': f'IPCA_{model_K}',
+            #'omit_char': omit_char,
+            #'model': IPCA(K=model_K, omit_char=omit_char)
+        #}
         
-    elif model_type == 'CA0':
-        return {
-            'name': f'CA0_{model_K}',
-            'omit_char': omit_char,
-            'model': CA0(hidden_size=model_K, lr=CA_LR, omit_char=omit_char)
-        } 
+    #elif model_type == 'CA0':
+        #return {
+            #'name': f'CA0_{model_K}',
+            #'omit_char': omit_char,
+            #'model': CA0(hidden_size=model_K, lr=CA_LR, omit_char=omit_char)
+        #}
             
-    elif model_type == 'CA1':
+    if model_type == 'CA1':
         return {
             'name': f'CA1_{model_K}',
             'omit_char': omit_char,
@@ -189,8 +189,8 @@ def model_selection(model_type, model_K, omit_char=[]):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--Model', type=str, default='FF PCA IPCA CA0 CA1 CA2 CA3')
-    parser.add_argument('--K', type=str, default='1 2 3 4 5 6')
+    parser.add_argument('--Model', type=str, default='CA1 CA2 CA3')
+    parser.add_argument('--K', type=str, default='1 2 3 4 5')
     parser.add_argument('--omit_char', type=str, default='')
 
     args = parser.parse_args()
