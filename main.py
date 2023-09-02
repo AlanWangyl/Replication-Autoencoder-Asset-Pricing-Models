@@ -3,6 +3,7 @@ import torch
 #from models.FF import FF
 #from models.IPCA import IPCA
 from models.CA import  CA1, CA2, CA3
+from models.Seq2Seq import seq2seq1, seq2seq2, seq2seq3
 
 import gc
 import argparse
@@ -124,6 +125,76 @@ def model_inference_and_predict_CA(model):
     gc.collect()
     return inference_result
 
+def model_inference_and_predict_seq2seq(model):
+    """
+    Inference and Prediction of seq2seq models:
+    Returns: model.name_inference.csv & model.name_inference.csv saved in path 'results'
+    """
+    model = model.to('cuda')
+    mon_list = pd.read_pickle('data/mon_list.pkl')
+    test_mons = mon_list.loc[(mon_list >= model.test_period[0])]
+    
+    if not len(model.omit_char): # no omit characteristics
+        inference_result = pd.DataFrame()
+        predict_result = pd.DataFrame()
+    else:
+        inference_result = []
+        
+    T_bar = tqdm(test_mons.groupby(test_mons.apply(lambda x: x//10000)), colour='red', desc=f'{model.name} Inferencing & Predicting')
+    
+    stock_index = pd.Series(dtype=np.int64)
+    for g in T_bar: # rolling train, refit once a year
+        T_bar.set_postfix({'Year': g[0]})
+
+        model.reset_weight()
+        model.release_gpu()
+        # release GPU memory
+        for _ in range(6): # call function multiple times to clear the cuda cache
+            torch.cuda.empty_cache()
+            
+        train_loss, val_loss = model.train_model()
+        # plot loss
+        plt.plot(train_loss, label='train_loss')
+        plt.plot(val_loss, label='val_loss')
+        plt.legend()
+        plt.savefig(f'results/train_loss/{model.name}_loss_{g[0]}.png')
+        plt.close()
+
+        for m in g[1].to_list():
+            m_stock_index, _, _, _ = model._get_item(m)
+            stock_index = pd.concat([stock_index, pd.Series(m_stock_index)]).drop_duplicates().astype(int)
+
+            if not len(model.omit_char): # no omit characteristics
+                # move inference_R and predict_R to cpu
+                inference_R = model.inference(m) # return (N, 1)
+                inference_R = inference_R.cpu().detach().numpy()
+                inference_R = pd.DataFrame(inference_R, index=m_stock_index, columns=[m])
+                inference_result = pd.concat([inference_result.reset_index(drop=True), inference_R.reset_index(drop=True)], axis=1) # (N, T)
+                
+                predict_R = model.predict(m) # reutrn (N, 1)
+                predict_R = predict_R.cpu().detach().numpy()
+                predict_R = pd.DataFrame(predict_R, index=m_stock_index, columns=[m])
+                predict_result = pd.concat([predict_result.reset_index(drop=True), predict_R.reset_index(drop=True)], axis=1) # (N, T)
+
+            else:
+                inference_R = model.inference(m) # return (N, m), m is the length of omit_char
+                inference_result.append(inference_R) # (T, N, m)
+            
+        # refit: change train period and valid period
+        model.refit()
+
+    if not len(model.omit_char):
+        inference_result = pd.DataFrame(inference_result.values.T, index=test_mons, columns=CHARAS_LIST)
+        inference_result.to_csv(f'results/inference/{model.name}_inference.csv')
+        
+        predict_result = pd.DataFrame(predict_result.values.T, index=test_mons, columns=CHARAS_LIST)
+        predict_result.to_csv(f'results/predict/{model.name}_predict.csv')
+
+    # GC: release RAM memory(model)
+    del model
+    gc.collect()
+    return inference_result
+
 
 
 def git_push(msg):
@@ -134,7 +205,7 @@ def git_push(msg):
 
 
 def model_selection(model_type, model_K, omit_char=[]):
-    assert model_type in ['CA1', 'CA2', 'CA3'],f'No Such Model: {model_type}'
+    assert model_type in ['seq2seq1', 'seq2seq2', 'seq2seq3', 'CA1', 'CA2', 'CA3'],f'No Such Model: {model_type}'
     
     #if model_type == 'FF':
         #return {
@@ -177,19 +248,37 @@ def model_selection(model_type, model_K, omit_char=[]):
             'omit_char': omit_char,
             'model': CA2(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
         } 
-        
-    else:
+    elif model_type == 'CA3':
         return {
             'name': f'CA3_{model_K}',
             'omit_char': omit_char,
             'model': CA3(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
+        } 
+
+    elif model_type == 'seq2seq1':
+        return {
+            'name': f'seq2seq1_{model_K}',
+            'omit_char': omit_char,
+            'model': seq2seq1(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
+        } 
+    elif model_type == 'seq2seq2':
+        return {
+            'name': f'seq2seq2_{model_K}',
+            'omit_char': omit_char,
+            'model': seq2seq2(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
+        } 
+    else:
+        return {
+            'name': f'seq2seq3_{model_K}',
+            'omit_char': omit_char,
+            'model': seq2seq3(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
         } 
         
  
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--Model', type=str, default='CA1 CA2 CA3')
+    parser.add_argument('--Model', type=str, default='seq2seq1 seq2seq2 seq2seq3 CA1 CA2 CA3')
     parser.add_argument('--K', type=str, default='1 2 3 4 5')
     parser.add_argument('--omit_char', type=str, default='')
 
