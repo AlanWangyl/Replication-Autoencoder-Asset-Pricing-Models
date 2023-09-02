@@ -5,24 +5,33 @@ import collections
 from .modelBase import modelBase
 from utils import CHARAS_LIST
 
-import torch
-from torch import nn
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from io import open
+import unicodedata
+import string
+import re
+import random
 
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+from torch import optim
+import torch.nn.functional as F
+
+use_cuda = torch.cuda.is_available()
 
 MAX_EPOCH = 200
 
-class CA_base(nn.Module, modelBase):
+class seq2seq_base(nn.Module, modelBase):
     def __init__(self, name, omit_char=[], device='cuda'):
         nn.Module.__init__(self)
         modelBase.__init__(self, name)
-        self.beta_nn = None
-        self.factor_nn = None
+        self.beta_seq = None
+        self.factor_seq = None
         self.optimizer = None
         self.criterion = None
         self.omit_char = omit_char
         
-        self.factor_nn_pred = []
+        self.factor_seq_pred = []
         
         self.device = device
 
@@ -37,9 +46,9 @@ class CA_base(nn.Module, modelBase):
     
     
     def debug(self, month):
-        beta_nn_input = self.p_charas.loc[self.p_charas['DATE'] == month][CHARAS_LIST]
-        # beta_nn_input = self.datashare_chara.loc[self.datashare_chara['DATE'] == month].set_index('permno')[charas]
-        print(beta_nn_input)
+        beta_seq_input = self.p_charas.loc[self.p_charas['DATE'] == month][CHARAS_LIST]
+        # beta_seq_input = self.datashare_chara.loc[self.datashare_chara['DATE'] == month].set_index('permno')[charas]
+        print(beta_seq_input)
 
 
     def _get_item(self, month):
@@ -47,58 +56,78 @@ class CA_base(nn.Module, modelBase):
             # find the closest month in p_charas to month
             month = self.p_charas['DATE'].values[np.argmin(np.abs(self.p_charas['DATE'].values - month))]
             
-        beta_nn_input = self.p_charas.loc[self.p_charas['DATE'] == month][CHARAS_LIST] # (94, 94)
+        beta_seq_input = self.p_charas.loc[self.p_charas['DATE'] == month][CHARAS_LIST] # (94, 94)
         labels = self.portfolio_ret.loc[self.portfolio_ret['DATE'] == month][CHARAS_LIST].T.values # (94, 1)
-        beta_nn_input['ret-rf'] = labels
-        align_df = beta_nn_input.copy(deep=False).dropna()
+        beta_seq_input['ret-rf'] = labels
+        align_df = beta_seq_input.copy(deep=False).dropna()
             
-        factor_nn_input = self.portfolio_ret.loc[self.portfolio_ret['DATE'] == month][CHARAS_LIST]
+        factor_seq_input = self.portfolio_ret.loc[self.portfolio_ret['DATE'] == month][CHARAS_LIST]
          
         # exit(0) if there is any nan in align_df
         if align_df.isnull().values.any():
             assert False, f'There is nan in align_df of : {month}'
-        # return stock index (L), beta_nn_input (94*94=P*N), factor_nn_input (94*1=P*1), labels (94, = N,)
-        return align_df.index, align_df.values[:, :-1].T, factor_nn_input.T.values , align_df.values[:, -1].T
+        # return stock index (L), beta_seq_input (94*94=P*N), factor_seq_input (94*1=P*1), labels (94, = N,)
+        return align_df.index, align_df.values[:, :-1].T, factor_seq_input.T.values , align_df.values[:, -1].T
     
     
     def dataloader(self, period): 
         mon_list = pd.read_pickle('data/mon_list.pkl')
         mon_list = mon_list.loc[(mon_list >= period[0]) & (mon_list <= period[1])]
-        beta_nn_input_set = []
-        factor_nn_input_set = []
+        beta_seq_input_set = []
+        factor_seq_input_set = []
         label_set = []
         for mon in mon_list:
             _, _beta_input, _factor_input, label =  self._get_item(mon)
-            beta_nn_input_set.append(_beta_input)
-            factor_nn_input_set.append(_factor_input)
+            beta_seq_input_set.append(_beta_input)
+            factor_seq_input_set.append(_factor_input)
             label_set.append(label)
             
-        beta_nn_input_set = torch.tensor(beta_nn_input_set, dtype=torch.float32).to(self.device)
-        factor_nn_input_set = torch.tensor(factor_nn_input_set, dtype=torch.float32).to(self.device)
+        beta_seq_input_set = torch.tensor(beta_seq_input_set, dtype=torch.float32).to(self.device)
+        factor_seq_input_set = torch.tensor(factor_seq_input_set, dtype=torch.float32).to(self.device)
         label_set = torch.tensor(label_set, dtype=torch.float32).to(self.device)
 
-        dataset = TensorDataset(beta_nn_input_set, factor_nn_input_set, label_set)   
+        dataset = TensorDataset(beta_seq_input_set, factor_seq_input_set, label_set)   
         return DataLoader(dataset, batch_size=1, shuffle=True)
 
 
     def forward(self, char, pfret):
-        processed_char = self.beta_nn(char)
-        processed_pfret = self.factor_nn(pfret)
+        processed_char = self.beta_seq(char)
+        
+        encoder_hidden = self.encoder_factor_seq.initHidden()
+        input_length = char.size(0)
+        encoder_outputs = torch.zeros(input_length, self.hidden_size, device=device)
+
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = self.encoder_factor_seq(char[ei], encoder_hidden)
+            encoder_outputs[ei] = encoder_output[0, 0]
+
+        # Factor Seq: Decoding
+        decoder_input = torch.tensor([[0]], device=device)  # Replace 0 with whatever start token you use
+        decoder_hidden = encoder_hidden
+        decoded_sequence = torch.zeros(input_length, 94, device=device)  # Assuming output size is 94
+
+        for di in range(input_length):
+            decoder_output, decoder_hidden = self.decoder_factor_seq(decoder_input, decoder_hidden)
+            decoded_sequence[di] = decoder_output
+            decoder_input = decoder_output.argmax(1)
+
+        # Now, 'decoded_sequence' can be used as 'factor_seq'
+        processed_pfret = decoded_sequence
         return torch.sum(processed_char * processed_pfret, dim=1)
 
     
     # train_one_epoch
     def __train_one_epoch(self):
         epoch_loss = 0.0
-        for i, (beta_nn_input, factor_nn_input, labels) in enumerate(self.train_dataloader):
+        for i, (beta_seq_input, factor_seq_input, labels) in enumerate(self.train_dataloader):
             self.optimizer.zero_grad()
             # beta_nn_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
             # factor_nn_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
             # labels reshape: (1, 94) -> (94, ) (1*N => N,)
-            beta_nn_input = beta_nn_input.squeeze(0).T
-            factor_nn_input = factor_nn_input.squeeze(0).T
+            beta_seq_input = beta_seq_input.squeeze(0).T
+            factor_seq_input = factor_seq_input.squeeze(0).T
             labels = labels.squeeze(0)
-            output = self.forward(beta_nn_input, factor_nn_input)
+            output = self.forward(beta_seq_input, factor_seq_input)
             loss = self.criterion(output, labels)
             
             loss.backward()
@@ -114,15 +143,15 @@ class CA_base(nn.Module, modelBase):
 
     def __valid_one_epoch(self):
         epoch_loss = 0.0
-        for i, (beta_nn_input, factor_nn_input, labels) in enumerate(self.valid_dataloader):
+        for i, (beta_seq_input, factor_seq_input, labels) in enumerate(self.valid_dataloader):
             # beta_nn_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
             # factor_nn_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
             # labels reshape: (1, 94) -> (94, ) (1*N => N,)
-            beta_nn_input = beta_nn_input.squeeze(0).T
-            factor_nn_input = factor_nn_input.squeeze(0).T
+            beta_seq_input = beta_seq_input.squeeze(0).T
+            factor_seq_input = factor_seq_input.squeeze(0).T
             labels = labels.squeeze(0)
 
-            output = self.forward(beta_nn_input, factor_nn_input)
+            output = self.forward(beta_seq_input, factor_seq_input)
             loss = self.criterion(output, labels)
             epoch_loss += loss.item()
 
@@ -177,12 +206,12 @@ class CA_base(nn.Module, modelBase):
         # labels = label[i]
         output = None
         label = None
-        for i, beta_nn_input, factor_nn_input, labels in enumerate(self.test_dataloader):
+        for i, beta_seq_input, factor_seq_input, labels in enumerate(self.test_dataloader):
             # convert to tensor
             # beta_nn_input = torch.tensor(beta_nn_input, dtype=torch.float32).T.to(self.device)
             # factor_nn_input = torch.tensor(factor_nn_input, dtype=torch.float32).T.to(self.device)
             # labels = torch.tensor(labels, dtype=torch.float32).T.to(self.device)
-            output = self.forward(beta_nn_input, factor_nn_input)
+            output = self.forward(beta_seq_input, factor_seq_input)
             break
 
         loss = self.criterion(output, labels)
@@ -193,31 +222,31 @@ class CA_base(nn.Module, modelBase):
 
 
     def calBeta(self, month, skip_char=[]):
-        _, beta_nn_input, _, _ = self._get_item(month) # beta input: 94*94 = P*N
+        _, beta_seq_input, _, _ = self._get_item(month) # beta input: 94*94 = P*N
         
         # if some variables need be omitted
         if len(skip_char):
-            beta_nn_input = pd.DataFrame(beta_nn_input.T, columns=CHARAS_LIST) # N*P
-            beta_nn_input[skip_char] = beta_nn_input[skip_char] * 0.0
-            beta_nn_input = beta_nn_input.values.T # P*N
+            beta_seq_input = pd.DataFrame(beta_seq_input.T, columns=CHARAS_LIST) # N*P
+            beta_seq_input[skip_char] = beta_seq_input[skip_char] * 0.0
+            beta_seq_input = beta_seq_input.values.T # P*N
         
-        beta_nn_input = torch.tensor(beta_nn_input, dtype=torch.float32).T.to(self.device) # N*P
-        return self.beta_nn(beta_nn_input) # N*K
+        beta_seq_input = torch.tensor(beta_seq_input, dtype=torch.float32).T.to(self.device) # N*P
+        return self.beta_seq(beta_seq_input) # N*K
     
     
     def calFactor(self, month, skip_char=[]):
-        _, _, factor_nn_input, _ = self._get_item(month) # factor input: P*1
+        _, _, factor_seq_input, _ = self._get_item(month) # factor input: P*1
         
         # if some variables need be omitted
         if len(skip_char):
-            factor_nn_input = pd.DataFrame(factor_nn_input.T, columns=CHARAS_LIST) # 1*P
-            factor_nn_input[skip_char] = factor_nn_input[skip_char] * 0.0
-            factor_nn_input = factor_nn_input.values.T # P*1
+            factor_seq_input = pd.DataFrame(factor_seq_input.T, columns=CHARAS_LIST) # 1*P
+            factor_seq_input[skip_char] = factor_seq_input[skip_char] * 0.0
+            factor_seq_input = factor_seq_input.values.T # P*1
 
-        factor_nn_input = torch.tensor(factor_nn_input, dtype=torch.float32).T.to(self.device) # 1*P
-        factor_pred = self.factor_nn(factor_nn_input).T # K*1
+        factor_seq_input = torch.tensor(factor_seq_input, dtype=torch.float32).T.to(self.device) # 1*P
+        factor_pred = self.factor_seq(factor_seq_input).T # K*1
         
-        self.factor_nn_pred.append(factor_pred)
+        self.factor_seq_pred.append(factor_pred)
         
         return factor_pred # K*1
     
@@ -247,20 +276,20 @@ class CA_base(nn.Module, modelBase):
     def cal_delayed_Factor(self, month):
         # calculate the last day of the previous month
         if self.refit_cnt == 0:
-            avg_f_pred = self.factor_nn_pred[0] # input of the first predict take hat{f}_t
+            avg_f_pred = self.factor_seq_pred[0] # input of the first predict take hat{f}_t
             # print(avg_f_pred.shape)
         else:
-            avg_f_pred = torch.mean(torch.stack(self.factor_nn_pred[:self.refit_cnt]), dim=0)
+            avg_f_pred = torch.mean(torch.stack(self.factor_seq_pred[:self.refit_cnt]), dim=0)
 
         return avg_f_pred
     
     
     def reset_weight(self):
-        for layer in self.beta_nn: # reset beta_nn parameters
+        for layer in self.beta_seq: # reset beta_nn parameters
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
         
-        for layer in self.factor_nn: # reset factor_nn parameters
+        for layer in self.factor_seq: # reset factor_nn parameters
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
                 
@@ -277,30 +306,77 @@ class CA_base(nn.Module, modelBase):
         torch.cuda.empty_cache()
 
 
+class EncoderRNN(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(EncoderRNN, self).__init__()
+        self.hidden_size = hidden_size
 
-class CA0(CA_base):
-    def __init__(self, hidden_size, lr=0.001, omit_char=[], device='cuda'):
-        CA_base.__init__(self, name=f'CA0_{hidden_size}', omit_char=omit_char, device=device)
-        # P -> K
-        self.beta_nn = nn.Sequential(
-            # output layer
-            nn.Linear(94, hidden_size)
-        )
-        self.factor_nn = nn.Sequential(
-            nn.Linear(94, hidden_size)
-        )
+        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size)
 
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        self.criterion = nn.MSELoss().to(device)
+    def forward(self, input, hidden):
+        embedded = self.embedding(input).view(1, 1, -1)
+        output = embedded
+        output, hidden = self.gru(output, hidden)
+        return output, hidden
+
+    def initHidden(self):
+        result = Variable(torch.zeros(1, 1, self.hidden_size))
+        if use_cuda:
+            return result.cuda()
+        else:
+            return result
+
+class DecoderRNN(nn.Module):
+    def __init__(self, hidden_size, output_size):
+        super(DecoderRNN, self).__init__()
+        self.hidden_size = hidden_size
+
+        self.embedding = nn.Embedding(output_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.out = nn.Linear(hidden_size, output_size)
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, input, hidden):
+        output = self.embedding(input).view(1, 1, -1)
+        output = F.relu(output)
+        output, hidden = self.gru(output, hidden)
+        output = self.softmax(self.out(output[0]))
+        return output, hidden
+
+    def initHidden(self):
+        result = Variable(torch.zeros(1, 1, self.hidden_size))
+        if use_cuda:
+            return result.cuda()
+        else:
+            return result
+
         
 
 
-class CA1(CA_base):
+class seq2seq0(seq2seq_base):
+    def __init__(self, hidden_size, lr=0.001, omit_char=[], device='cuda'):
+        seq2seq_base.__init__(self, name=f'seq2seq0_{hidden_size}', omit_char=omit_char, device=device)
+        # P -> K
+        self.beta_seq = nn.Sequential(
+            # output layer
+            nn.Linear(94, hidden_size)
+        )
+        # Initialize the encoder and decoder for factor_seq
+        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
+        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)  # output size is 94
+
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        self.criterion = nn.MSELoss().to(device)
+
+
+
+class seq2seq1(seq2seq_base):
     def __init__(self, hidden_size, dropout=0.5, lr=0.001, omit_char=[], device='cuda'):
-        CA_base.__init__(self, name=f'CA1_{hidden_size}', omit_char=omit_char, device=device)
+        seq2seq_base.__init__(self, name=f'seq2seq1_{hidden_size}', omit_char=omit_char, device=device)
         self.dropout = dropout
         # P -> 32 -> K
-        self.beta_nn = nn.Sequential(
+        self.beta_seq = nn.Sequential(
             # hidden layer 1
             nn.Linear(94, 32),
             nn.BatchNorm1d(32),
@@ -309,18 +385,18 @@ class CA1(CA_base):
             # output layer
             nn.Linear(32, hidden_size)
         )
-        self.factor_nn = nn.Sequential(
-            nn.Linear(94, hidden_size)
-        )
+        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
+        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)
         
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
         
         
+###应该self.factor_seq 被self.decoder_factor_seq替换      
         
-class CA2(CA_base):
+class seq2seq2(seq2seq_base):
     def __init__(self, hidden_size, dropout=0.5, lr=0.001, omit_char=[], device='cuda'):
-        CA_base.__init__(self, name=f'CA2_{hidden_size}', omit_char=omit_char, device=device)
+        seq2seq_base.__init__(self, name=f'seq2seq2_{hidden_size}', omit_char=omit_char, device=device)
         self.dropout = dropout
         # P -> 32 -> 16 -> K
         self.beta_nn = nn.Sequential(
@@ -337,21 +413,20 @@ class CA2(CA_base):
             # output layer
             nn.Linear(16, hidden_size)
         )
-        self.factor_nn = nn.Sequential(
-            nn.Linear(94, hidden_size)
-        )
-
+        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
+        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)
+        
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
 
 
 
-class CA3(CA_base):
+class seq2seq3(seq2seq_base):
     def __init__(self, hidden_size, dropout=0.5, lr=0.001, omit_char=[], device='cuda'):
-        CA_base.__init__(self, name=f'CA3_{hidden_size}', omit_char=omit_char, device=device)
+        seq2seq_base.__init__(self, name=f'seq2seq3_{hidden_size}', omit_char=omit_char, device=device)
         self.dropout = dropout
         # P -> 32 -> 16 -> 8 -> K
-        self.beta_nn = nn.Sequential(
+        self.beta_seq = nn.Sequential(
             # hidden layer 1
             nn.Linear(94, 32),
             nn.BatchNorm1d(32),
@@ -370,9 +445,8 @@ class CA3(CA_base):
             # output layer
             nn.Linear(8, hidden_size)
         )
-        self.factor_nn = nn.Sequential(
-            nn.Linear(94, hidden_size)
-        )
+        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
+        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)
         
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=0.01)
         self.criterion = nn.MSELoss().to(device)
