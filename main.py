@@ -3,7 +3,7 @@ import torch
 #from models.FF import FF
 #from models.IPCA import IPCA
 from models.CA import  CA1, CA2, CA3
-from models.Seq2Seq import seq2seq1, seq2seq2, seq2seq3
+from models.seq import seq2seq1, seq2seq2, seq2seq3
 
 import gc
 import argparse
@@ -146,7 +146,7 @@ def model_inference_and_predict_seq2seq(model):
     for g in T_bar: # rolling train, refit once a year
         T_bar.set_postfix({'Year': g[0]})
 
-        model.reset_weight()
+
         model.release_gpu()
         # release GPU memory
         for _ in range(6): # call function multiple times to clear the cuda cache
@@ -315,7 +315,8 @@ if __name__ == "__main__":
             # if have omit char, inf_ret (T, N, m)
             inf_ret = model_inference_and_predict_CA(model['model'])  
         else:
-            inf_ret = model_inference_and_predict(model['model'])
+            print('model_inference_and_predict_seq')
+            inf_ret = model_inference_and_predict_seq2seq(model['model'])
         
         gc.collect()    
         

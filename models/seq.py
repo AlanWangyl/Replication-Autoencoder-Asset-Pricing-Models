@@ -92,11 +92,11 @@ class seq2seq_base(nn.Module, modelBase):
         processed_char = self.beta_seq(char)
 
         encoder_hidden = self.encoder_factor_seq.initHidden()
-        input_length = char.size(0)
+        input_length = pfret.size(0)
         encoder_outputs = torch.zeros(input_length, self.hidden_size, device=self.device)
 
         for ei in range(input_length):
-            encoder_output, encoder_hidden = self.encoder_factor_seq(char[ei], encoder_hidden)
+            encoder_output, encoder_hidden = self.encoder_factor_seq(pfret[ei:ei+1].long(), encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 
         # Factor Seq: Decoding
@@ -304,6 +304,7 @@ class EncoderRNN(nn.Module):
         self.gru = nn.GRU(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
+        input = input.long()
         embedded = self.embedding(input).view(1, 1, -1)
         output = embedded
         output, hidden = self.gru(output, hidden)
@@ -328,6 +329,7 @@ class DecoderRNN(nn.Module):
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, hidden):
+        input = input.long()
         output = self.embedding(input).view(1, 1, -1)
         output = F.relu(output)
         output, hidden = self.gru(output, hidden)
