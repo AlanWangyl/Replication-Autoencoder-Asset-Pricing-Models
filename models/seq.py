@@ -6,11 +6,6 @@ from .modelBase import modelBase
 from utils import CHARAS_LIST
 
 from io import open
-import unicodedata
-import string
-import re
-import random
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -90,36 +85,23 @@ class seq2seq_base(nn.Module, modelBase):
 
     def forward(self, char, pfret):
         processed_char = self.beta_seq(char)
-
-        encoder_hidden = self.encoder_factor_seq.initHidden()
-        input_length = pfret.size(0)
-        encoder_outputs = torch.zeros(input_length, self.hidden_size, device=self.device)
-
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = self.encoder_factor_seq(pfret[ei:ei+1].long(), encoder_hidden)
-            encoder_outputs[ei] = encoder_output[0, 0]
-
-        # Factor Seq: Decoding
-        decoder_input = torch.tensor([[0]], device=self.device)  # Replace 0 with whatever start token you use
-        decoder_hidden = encoder_hidden
-        decoded_sequence = torch.zeros(input_length, 94, device=self.device)  # Assuming output size is 94
-
-        for di in range(input_length):
-            decoder_output, decoder_hidden = self.decoder_factor_seq(decoder_input, decoder_hidden)
-            decoded_sequence[di] = decoder_output
-            decoder_input = decoder_output.argmax(1)
+        # print(processed_char.shape)
+        decoded_sequence = self.factor_seq(pfret)
 
         # Now, 'decoded_sequence' can be used as 'factor_seq'
         processed_pfret = decoded_sequence
-        return torch.sum(processed_char * processed_pfret, dim=1)
+        
+        # return torch.sum(processed_char * processed_pfret, dim=1)
+        return torch.mm(processed_char, processed_pfret)
 
     # train_one_epoch
     def __train_one_epoch(self):
         epoch_loss = 0.0
+        self.train()
         for i, (beta_seq_input, factor_seq_input, labels) in enumerate(self.train_dataloader):
-            self.optimizer.zero_grad()
-            # beta_seq_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
-            # factor_seq_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
+            
+            # beta_nn_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
+            # factor_nn_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
             # labels reshape: (1, 94) -> (94, ) (1*N => N,)
             beta_seq_input = beta_seq_input.squeeze(0).T
             factor_seq_input = factor_seq_input.squeeze(0).T
@@ -127,6 +109,7 @@ class seq2seq_base(nn.Module, modelBase):
             output = self.forward(beta_seq_input, factor_seq_input)
             loss = self.criterion(output, labels)
 
+            self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
             epoch_loss += loss.item()
@@ -140,8 +123,8 @@ class seq2seq_base(nn.Module, modelBase):
     def __valid_one_epoch(self):
         epoch_loss = 0.0
         for i, (beta_seq_input, factor_seq_input, labels) in enumerate(self.valid_dataloader):
-            # beta_seq_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
-            # factor_seq_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
+            # beta_nn_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
+            # factor_nn_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
             # labels reshape: (1, 94) -> (94, ) (1*N => N,)
             beta_seq_input = beta_seq_input.squeeze(0).T
             factor_seq_input = factor_seq_input.squeeze(0).T
@@ -167,7 +150,6 @@ class seq2seq_base(nn.Module, modelBase):
         train_loss = []
         for i in range(MAX_EPOCH):
             # print(f'Epoch {i}')
-            self.train()
             train_error = self.__train_one_epoch()
             train_loss.append(train_error)
 
@@ -195,15 +177,15 @@ class seq2seq_base(nn.Module, modelBase):
     def test_model(self):
         # beta, factor, label = self.test_dataset
         # i = np.random.randint(len(beta))
-        # beta_seq_input = beta[i]
-        # factor_seq_input = factor[i]
+        # beta_nn_input = beta[i]
+        # factor_nn_input = factor[i]
         # labels = label[i]
         output = None
         label = None
         for i, beta_seq_input, factor_seq_input, labels in enumerate(self.test_dataloader):
             # convert to tensor
-            # beta_seq_input = torch.tensor(beta_seq_input, dtype=torch.float32).T.to(self.device)
-            # factor_seq_input = torch.tensor(factor_seq_input, dtype=torch.float32).T.to(self.device)
+            # beta_nn_input = torch.tensor(beta_nn_input, dtype=torch.float32).T.to(self.device)
+            # factor_nn_input = torch.tensor(factor_nn_input, dtype=torch.float32).T.to(self.device)
             # labels = torch.tensor(labels, dtype=torch.float32).T.to(self.device)
             output = self.forward(beta_seq_input, factor_seq_input)
             break
@@ -227,7 +209,7 @@ class seq2seq_base(nn.Module, modelBase):
         return self.beta_seq(beta_seq_input)  # N*K
 
     def calFactor(self, month, skip_char=[]):
-        _, _, factor_seq_input, _ = self._get_item(month)  # factor input: P*1(94*1)
+        _, _, factor_seq_input, _ = self._get_item(month)  # factor input: P*1
 
         # if some variables need be omitted
         if len(skip_char):
@@ -236,7 +218,7 @@ class seq2seq_base(nn.Module, modelBase):
             factor_seq_input = factor_seq_input.values.T  # P*1
 
         factor_seq_input = torch.tensor(factor_seq_input, dtype=torch.float32).T.to(self.device)  # 1*P
-        factor_pred = self.factor_seq(factor_seq_input).T  # K*1
+        factor_pred = self.factor_seq(factor_seq_input)  # K*1
 
         self.factor_seq_pred.append(factor_pred)
 
@@ -248,8 +230,7 @@ class seq2seq_base(nn.Module, modelBase):
 
             mon_factor, mon_beta = self.calFactor(month), self.calBeta(month)
 
-            assert mon_beta.shape[1] == mon_factor.shape[
-                0], f"Dimension mismatch between mon_factor: {mon_factor.shape} and mon_beta: {mon_beta.shape}"
+            assert mon_beta.shape[1] == mon_factor.shape[0], f"Dimension mismatch between mon_factor: {mon_factor.shape} and mon_beta: {mon_beta.shape}"
 
             # R_{N*1} = Beta_{N*K} @ F_{K*1}
             return mon_beta @ mon_factor
@@ -295,88 +276,91 @@ class seq2seq_base(nn.Module, modelBase):
         torch.cuda.empty_cache()
 
 
-class encoder(nn.Module):
-    def __init__(self, input_size, hidden_size=128,n_layers=1):
-        super(encoder, self).__init__()
+class EncoderRNN(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(EncoderRNN, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.n_layers = n_layers
 
-        self.gru = nn.GRU(hidden_size, hidden_size,n_layers)
+        self.embedding = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.gru = nn.GRU(hidden_size, hidden_size, batch_first=True)
 
-    def forward(self, x):
-        output,hidden = self.gru(x)
+    def forward(self, input, hidden):
+        # input = input.long()
+        b, l = input.shape
+        input = input.reshape(b, l, 1)
+        embedded = self.embedding(input)
+        embedded = self.relu(embedded)
+        output, hidden = self.gru(embedded, hidden)
+        
         return output, hidden
 
-class decoder(nn.Module):
-    def __init__(self, output_size, hidden_size = 128, n_layers = 1):
-        super(decoder, self).__init__()
-        self.output_size = output_size
+    def initHidden(self):
+        result = Variable(torch.zeros(1, 1, self.hidden_size))
+        # result = Variable(torch.zeros(1, self.hidden_size, self.input_size))
+        if use_cuda:
+            return result.cuda()
+        else:
+            return result
+
+
+class DecoderRNN(nn.Module):
+    def __init__(self, hidden_size, output_size):
+        super(DecoderRNN, self).__init__()
         self.hidden_size = hidden_size
-        self.n_layers = n_layers
-
-        self.gru = nn.GRU(hidden_size, hidden_size, n_layers)
+        
+        # self.embedding = nn.Linear(hidden_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size, batch_first=True)
+        self.relu = nn.ReLU()
         self.out = nn.Linear(hidden_size, output_size)
+        self.act = nn.Sigmoid()
 
-    def forward(self, x, hidden):
-        x = x.unsqueeze(0)
-        output, hidden = self.gru(x, hidden)
-        fac_pred = self.out(output)
+    def forward(self, input, hidden):
+        output, hidden = self.gru(input, hidden)
+        output = self.relu(output)
+        output = self.out(output[0])
+        output = self.act(output)
+        return output, hidden
 
-        return fac_pred, hidden
+    def initHidden(self):
+        result = Variable(torch.zeros(1, 1, self.hidden_size))
+        if use_cuda:
+            return result.cuda()
+        else:
+            return result
 
-
-# Combine Encoder and Decoder to create a seq2seq model to predict returns
-class seq_model(nn.Module):
-    def __init__(self, encoder, decoder, device):
-        super().__init__()
-        self.encoder = encoder
-        self.decoder = decoder
+class FactorSeq(nn.Module):
+    def __init__(self, input_size, hidden_size, device='cuda'):
+        super(FactorSeq, self).__init__()
+        self.encoder = EncoderRNN(input_size, hidden_size)
+        self.decoder = DecoderRNN(hidden_size, input_size)
+        self.hidden_size = hidden_size
         self.device = device
+    
+    def forward(self, input):
+        encoder_hidden = self.encoder.initHidden()
+        
+        encoder_output, encoder_hidden = self.encoder(input, encoder_hidden)
+        decoder_output, _ = self.decoder(encoder_output, encoder_hidden)
+        decoded_sequence = decoder_output
+        # print(decoded_sequence.shape)
+        # decoder_input = decoder_output.argmax(1)
 
-    def forward(self, x, y, teacher_forcing_ratio=0.5):
-        x = x.permute(1, 0, 2)  # dataloader is [batch, seq,dim]
-        y = y.permute(1, 0, 2)  # output back
-        """
-        x = [input_seq_len, batch_size, feature_size]
-        y = [target_seq_len, batch_size, feature_size]
-        """
-        batch_size = x.shape[1]
-        target_len = y.shape[0]
-
-        # tensor to store decoder outputs of each time step
-        outputs = torch.zeros(y.shape).to(self.device)
-
-        hidden = self.encoder(x)
-        decoder_input = x[-1, :, :]  # first input to decoder is last of x
-
-        for i in range(target_len):
-            output, hidden = self.decoder(decoder_input, hidden)
-            # place predictions in a tensor holding predictions for each time step
-            outputs[i] = torch.squeeze(output, 0)
-
-            teacher_forcing = random.random() < teacher_forcing_ratio
-            # output is the same shape as decorder input-->[batch_size, feature_size]
-            # so we use output directly as input or use true lable depending on teacher_forcing flag
-            decoder_input = y[i] if teacher_forcing else torch.squeeze(output, 0)
-
-            final_fac_output = outputs.permute(1, 0, 2)
-
-        return final_fac_output
-
-
+        return decoded_sequence
 
 
 class seq2seq0(seq2seq_base):
     def __init__(self, hidden_size, lr=0.001, omit_char=[], device='cuda'):
         seq2seq_base.__init__(self, name=f'seq2seq0_{hidden_size}', omit_char=omit_char, device=device)
-        self.hidden_size = hidden_size
         # P -> K
         self.beta_seq = nn.Sequential(
             # output layer
             nn.Linear(94, hidden_size)
         )
-        self.factor_seq = final_output(# 此处想带入decoder产生的最后结果final_fac_output)
+        # Initialize the encoder and decoder for factor_seq
+        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
+        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)  # output size is 94
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
@@ -388,6 +372,7 @@ class seq2seq1(seq2seq_base):
         self.hidden_size = hidden_size
         self.dropout = dropout
         # P -> 32 -> K
+        K = 94
         self.beta_seq = nn.Sequential(
             # hidden layer 1
             nn.Linear(94, 32),
@@ -395,15 +380,15 @@ class seq2seq1(seq2seq_base):
             nn.ReLU(),
             nn.Dropout(self.dropout),
             # output layer
-            nn.Linear(32, hidden_size)
+            nn.Linear(32, K)
         )
-        self.factor_seq =
+        self.factor_seq = FactorSeq(input_size=1, hidden_size=hidden_size)
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
 
 
-
+###应该self.factor_seq 被self.decoder_factor_seq替换
 
 class seq2seq2(seq2seq_base):
     def __init__(self, hidden_size, dropout=0.5, lr=0.001, omit_char=[], device='cuda'):
@@ -411,7 +396,8 @@ class seq2seq2(seq2seq_base):
         self.hidden_size = hidden_size
         self.dropout = dropout
         # P -> 32 -> 16 -> K
-        self.beta_nn = nn.Sequential(
+        K = 94
+        self.beta_seq = nn.Sequential(
             # hidden layer 1
             nn.Linear(94, 32),
             nn.BatchNorm1d(32),
@@ -423,9 +409,9 @@ class seq2seq2(seq2seq_base):
             nn.ReLU(),
             nn.Dropout(self.dropout),
             # output layer
-            nn.Linear(16, hidden_size)
+            nn.Linear(16, K)
         )
-        self.factor_seq =
+        self.factor_seq = FactorSeq(input_size=1, hidden_size=hidden_size)
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
@@ -437,6 +423,7 @@ class seq2seq3(seq2seq_base):
         self.hidden_size = hidden_size
         self.dropout = dropout
         # P -> 32 -> 16 -> 8 -> K
+        K = 94
         self.beta_seq = nn.Sequential(
             # hidden layer 1
             nn.Linear(94, 32),
@@ -454,9 +441,9 @@ class seq2seq3(seq2seq_base):
             nn.ReLU(),
             nn.Dropout(self.dropout),
             # output layer
-            nn.Linear(8, hidden_size)
+            nn.Linear(8, K)
         )
-        self.factor_seq =
+        self.factor_seq = FactorSeq(input_size=1, hidden_size=hidden_size)
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=0.01)
         self.criterion = nn.MSELoss().to(device)
