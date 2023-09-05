@@ -360,7 +360,8 @@ class seq2seq0(seq2seq_base):
         )
         # Initialize the encoder and decoder for factor_seq
         self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
-        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)  # output size is 94
+        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)# output size is 94
+        self.factor_seq = self.decoder_factor_seq
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
