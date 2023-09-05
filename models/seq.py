@@ -118,8 +118,8 @@ class seq2seq_base(nn.Module, modelBase):
         epoch_loss = 0.0
         for i, (beta_seq_input, factor_seq_input, labels) in enumerate(self.train_dataloader):
             self.optimizer.zero_grad()
-            # beta_nn_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
-            # factor_nn_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
+            # beta_seq_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
+            # factor_seq_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
             # labels reshape: (1, 94) -> (94, ) (1*N => N,)
             beta_seq_input = beta_seq_input.squeeze(0).T
             factor_seq_input = factor_seq_input.squeeze(0).T
@@ -140,8 +140,8 @@ class seq2seq_base(nn.Module, modelBase):
     def __valid_one_epoch(self):
         epoch_loss = 0.0
         for i, (beta_seq_input, factor_seq_input, labels) in enumerate(self.valid_dataloader):
-            # beta_nn_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
-            # factor_nn_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
+            # beta_seq_input reshape: (1, 94, 94) -> (94, 94) (1*P*N => N*P)
+            # factor_seq_input reshape: (1, 94, 1) -> (1, 94) (1*P*1 => 1*P)
             # labels reshape: (1, 94) -> (94, ) (1*N => N,)
             beta_seq_input = beta_seq_input.squeeze(0).T
             factor_seq_input = factor_seq_input.squeeze(0).T
@@ -195,15 +195,15 @@ class seq2seq_base(nn.Module, modelBase):
     def test_model(self):
         # beta, factor, label = self.test_dataset
         # i = np.random.randint(len(beta))
-        # beta_nn_input = beta[i]
-        # factor_nn_input = factor[i]
+        # beta_seq_input = beta[i]
+        # factor_seq_input = factor[i]
         # labels = label[i]
         output = None
         label = None
         for i, beta_seq_input, factor_seq_input, labels in enumerate(self.test_dataloader):
             # convert to tensor
-            # beta_nn_input = torch.tensor(beta_nn_input, dtype=torch.float32).T.to(self.device)
-            # factor_nn_input = torch.tensor(factor_nn_input, dtype=torch.float32).T.to(self.device)
+            # beta_seq_input = torch.tensor(beta_seq_input, dtype=torch.float32).T.to(self.device)
+            # factor_seq_input = torch.tensor(factor_seq_input, dtype=torch.float32).T.to(self.device)
             # labels = torch.tensor(labels, dtype=torch.float32).T.to(self.device)
             output = self.forward(beta_seq_input, factor_seq_input)
             break
