@@ -227,7 +227,7 @@ class seq2seq_base(nn.Module, modelBase):
         return self.beta_seq(beta_seq_input)  # N*K
 
     def calFactor(self, month, skip_char=[]):
-        _, _, factor_seq_input, _ = self._get_item(month)  # factor input: P*1
+        _, _, factor_seq_input, _ = self._get_item(month)  # factor input: P*1(94*1)
 
         # if some variables need be omitted
         if len(skip_char):
@@ -295,66 +295,88 @@ class seq2seq_base(nn.Module, modelBase):
         torch.cuda.empty_cache()
 
 
-class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super(EncoderRNN, self).__init__()
+class Encoder(nn.Module):
+    def __init__(self, input_size, hidden_size=128,n_layers=1):
+        super(Encoder, self).__init__()
+        self.input_size = input_size
         self.hidden_size = hidden_size
+        self.n_layers = n_layers
 
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size,n_layers)
 
-    def forward(self, input, hidden):
-        input = input.long()
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        output, hidden = self.gru(output, hidden)
+    def forward(self, x):
+        output,hidden = self.gru(x)
         return output, hidden
-
-    def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.hidden_size))
-        if use_cuda:
-            return result.cuda()
-        else:
-            return result
-
 
 class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size):
+    def __init__(self, output_size, hidden_size = 128, n_layers = 1):
         super(DecoderRNN, self).__init__()
+        self.output_size = output_size
         self.hidden_size = hidden_size
+        self.n_layers = n_layers
 
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size, n_layers)
         self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
 
-    def forward(self, input, hidden):
-        input = input.long()
-        output = self.embedding(input).view(1, 1, -1)
-        output = F.relu(output)
-        output, hidden = self.gru(output, hidden)
-        output = self.softmax(self.out(output[0]))
-        return output, hidden
+    def forward(self, x, hidden):
+        x = x.unsqueeze(0)
+        output, hidden = self.gru(x, hidden)
+        fac_pred = self.out(output)
 
-    def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.hidden_size))
-        if use_cuda:
-            return result.cuda()
-        else:
-            return result
+        return fac_pred, hidden
+
+
+# Combine Encoder and Decoder to create a seq2seq model to predict returns
+class seq_model(nn.Module):
+    def __init__(self, encoder, decoder, device):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.device = device
+
+    def forward(self, x, y, teacher_forcing_ratio=0.5):
+        x = x.permute(1, 0, 2)  # dataloader is [batch, seq,dim]
+        y = y.permute(1, 0, 2)  # output back
+        """
+        x = [input_seq_len, batch_size, feature_size]
+        y = [target_seq_len, batch_size, feature_size]
+        """
+        batch_size = x.shape[1]
+        target_len = y.shape[0]
+
+        # tensor to store decoder outputs of each time step
+        outputs = torch.zeros(y.shape).to(self.device)
+
+        hidden = self.encoder(x)
+        decoder_input = x[-1, :, :]  # first input to decoder is last of x
+
+        for i in range(target_len):
+            output, hidden = self.decoder(decoder_input, hidden)
+            # place predictions in a tensor holding predictions for each time step
+            outputs[i] = torch.squeeze(output, 0)
+
+            teacher_forcing = random.random() < teacher_forcing_ratio
+            # output is the same shape as decorder input-->[batch_size, feature_size]
+            # so we use output directly as input or use true lable depending on teacher_forcing flag
+            decoder_input = y[i] if teacher_forcing else torch.squeeze(output, 0)
+
+            final_output = outputs.permute(1, 0, 2)
+
+        return final_output
+
+
 
 
 class seq2seq0(seq2seq_base):
     def __init__(self, hidden_size, lr=0.001, omit_char=[], device='cuda'):
         seq2seq_base.__init__(self, name=f'seq2seq0_{hidden_size}', omit_char=omit_char, device=device)
+        self.hidden_size = hidden_size
         # P -> K
         self.beta_seq = nn.Sequential(
             # output layer
             nn.Linear(94, hidden_size)
         )
-        # Initialize the encoder and decoder for factor_seq
-        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
-        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)  # output size is 94
+        self.factor_seq = final_output(# 此处想带入decoder产生的最后结果final_output)
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
@@ -375,14 +397,13 @@ class seq2seq1(seq2seq_base):
             # output layer
             nn.Linear(32, hidden_size)
         )
-        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
-        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)
+        self.factor_seq =
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
 
 
-###应该self.factor_seq 被self.decoder_factor_seq替换
+
 
 class seq2seq2(seq2seq_base):
     def __init__(self, hidden_size, dropout=0.5, lr=0.001, omit_char=[], device='cuda'):
@@ -404,8 +425,7 @@ class seq2seq2(seq2seq_base):
             # output layer
             nn.Linear(16, hidden_size)
         )
-        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
-        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)
+        self.factor_seq =
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
@@ -436,8 +456,7 @@ class seq2seq3(seq2seq_base):
             # output layer
             nn.Linear(8, hidden_size)
         )
-        self.encoder_factor_seq = EncoderRNN(94, hidden_size).to(device)
-        self.decoder_factor_seq = DecoderRNN(hidden_size, 94).to(device)
+        self.factor_seq =
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=0.01)
         self.criterion = nn.MSELoss().to(device)
