@@ -295,9 +295,9 @@ class seq2seq_base(nn.Module, modelBase):
         torch.cuda.empty_cache()
 
 
-class Encoder(nn.Module):
+class encoder(nn.Module):
     def __init__(self, input_size, hidden_size=128,n_layers=1):
-        super(Encoder, self).__init__()
+        super(encoder, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.n_layers = n_layers
@@ -308,9 +308,9 @@ class Encoder(nn.Module):
         output,hidden = self.gru(x)
         return output, hidden
 
-class DecoderRNN(nn.Module):
+class decoder(nn.Module):
     def __init__(self, output_size, hidden_size = 128, n_layers = 1):
-        super(DecoderRNN, self).__init__()
+        super(decoder, self).__init__()
         self.output_size = output_size
         self.hidden_size = hidden_size
         self.n_layers = n_layers
@@ -360,9 +360,9 @@ class seq_model(nn.Module):
             # so we use output directly as input or use true lable depending on teacher_forcing flag
             decoder_input = y[i] if teacher_forcing else torch.squeeze(output, 0)
 
-            final_output = outputs.permute(1, 0, 2)
+            final_fac_output = outputs.permute(1, 0, 2)
 
-        return final_output
+        return final_fac_output
 
 
 
@@ -376,7 +376,7 @@ class seq2seq0(seq2seq_base):
             # output layer
             nn.Linear(94, hidden_size)
         )
-        self.factor_seq = final_output(# 此处想带入decoder产生的最后结果final_output)
+        self.factor_seq = final_output(# 此处想带入decoder产生的最后结果final_fac_output)
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.criterion = nn.MSELoss().to(device)
