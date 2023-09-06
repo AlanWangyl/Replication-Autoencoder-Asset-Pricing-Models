@@ -102,9 +102,14 @@ def plot_R2_bar(R_df, type):
     #PCA = (R_df.loc[R_df['Model']=='PCA'][1]*100).to_list()
     #IPCA = (R_df.loc[R_df['Model']=='IPCA'][1]*100).to_list()
     #CA0 = (R_df.loc[R_df['Model']=='CA0'][1]*100).to_list()
-    CA1 = (R_df.loc[R_df['Model']=='CA1'][1]*100).to_list()
+    #CA1 = (R_df.loc[R_df['Model']=='CA1'][1]*100).to_list()
     CA2 = (R_df.loc[R_df['Model']=='CA2'][1]*100).to_list()
-    CA3 = (R_df.loc[R_df['Model']=='CA3'][1]*100).to_list()
+    #CA3 = (R_df.loc[R_df['Model']=='CA3'][1]*100).to_list()
+    seq2seq1 = (R_df.loc[R_df['Model'] == 'seq2seq1'][1] * 100).to_list()
+    seq2seq2 = (R_df.loc[R_df['Model'] == 'seq2seq2'][1] * 100).to_list()
+    seq2seq3 = (R_df.loc[R_df['Model'] == 'seq2seq3'][1] * 100).to_list()
+
+
 
 
     x = np.arange(len(labels))  # 标签位置
@@ -115,9 +120,12 @@ def plot_R2_bar(R_df, type):
     #ax.bar(x - width*2 , PCA, width, label='PCA', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[2]))
     #ax.bar(x - width , IPCA, width, label='IPCA', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
     #ax.bar(x + 0.00, CA0, width, label='CA0', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[4]))
-    ax.bar(x + width , CA1, width, label='CA1', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[1]))
-    ax.bar(x + width*2 , CA2, width, label='CA2', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[2]))
-    ax.bar(x + width*3 , CA3, width, label='CA3', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
+    #ax.bar(x - width*3, CA1, width, label='CA1', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[1]))
+    ax.bar(x - width, CA2, width, label='CA2', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[1]))
+    #ax.bar(x - width, CA3, width, label='CA3', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
+    ax.bar(x + 0.00, seq2seq1, width, label='seq2seq1', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[2]))
+    ax.bar(x + width, seq2seq2, width, label='seq2seq2', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[3]))
+    ax.bar(x + width * 2, seq2seq3, width, label='seq2seq3', color=plt.get_cmap('OrRd')(np.linspace(0, 1, 8)[4]))
 
 
     ax.set_ylabel(f'Portfolio {type} R^2 (%)')
@@ -166,11 +174,13 @@ def round_number(num):
 
     
 if __name__=="__main__":
-    CAs = ["CA1_1", "CA1_2", "CA1_3", "CA1_4", "CA1_5", "CA2_1", "CA2_2", "CA2_3", "CA2_4", "CA2_5", "CA3_1", "CA3_2", "CA3_3", "CA3_4", "CA3_5"]
+    #CAs = ["CA1_1", "CA1_2", "CA1_3", "CA1_4", "CA1_5", "CA2_1", "CA2_2", "CA2_3", "CA2_4", "CA2_5", "CA3_1", "CA3_2", "CA3_3", "CA3_4", "CA3_5"]
+    CAs =["CA2_1", "CA2_2", "CA2_3", "CA2_4", "CA2_5"]
+    Seqs = ["seq2seq1_1", "seq2seq1_2","seq2seq1_3","seq2seq1_4","seq2seq1_5","seq2seq2_1","seq2seq2_2","seq2seq2_3","seq2seq2_4","seq2seq2_5","seq2seq3_1","seq2seq3_2","seq2seq3_3","seq2seq3_4","seq2seq3_5"]
     #FFs = ["FF_1", "FF_2", "FF_3", "FF_4", "FF_5", "FF_6"]
     #PCAs = ["PCA_1", "PCA_2", "PCA_3", "PCA_4", "PCA_5", "PCA_6"]
     #IPCAs = ["IPCA_1", "IPCA_2", "IPCA_3", "IPCA_4", "IPCA_5", "IPCA_6"]
-    models = CAs
+    models = CAs + Seqs
     
     ## Plot R^2 bars
     total_R2 = []
@@ -187,8 +197,8 @@ if __name__=="__main__":
     plot_R2_bar(R_pred, 'pred')
     
     ## Save R^2 tables
-    R_total_df = pd.DataFrame(np.array(total_R2).reshape(-1, 5), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5'], index=['CA1', 'CA2', 'CA3'])
-    R_pred_df = pd.DataFrame(np.array(predict_R2).reshape(-1, 5), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5'], index=['CA1', 'CA2', 'CA3'])
+    R_total_df = pd.DataFrame(np.array(total_R2).reshape(-1, 5), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5'], index=['CA2', 'seq2seq1', 'seq2seq2', 'seq2seq3'])
+    R_pred_df = pd.DataFrame(np.array(predict_R2).reshape(-1, 5), columns = ['K=1', 'K=2', 'K=3', 'K=4', 'K=5'], index=['CA2', 'seq2seq1', 'seq2seq2', 'seq2seq3'])
     
     plot_R2_table(R_total_df, 'total')
     plot_R2_table(R_pred_df, 'pred')  

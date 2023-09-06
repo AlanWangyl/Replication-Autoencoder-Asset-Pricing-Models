@@ -20,39 +20,6 @@ import os
 
 import warnings
 warnings.filterwarnings('ignore')
-
-
-
-#def model_inference_and_predict(model):
-    #"""
-    #Inference and Prediction of non NN models:
-    #Returns: model.name_inference.csv & model.name_inference.csv saved in path 'results'
-    #"""
-   # mon_list = pd.read_pickle('data/mon_list.pkl')
-    #test_mons = mon_list.loc[mon_list >= model.test_period[0]]
-    #inference_result = []
-    #predict_result = []
-    #T_bar = tqdm(test_mons.groupby(test_mons.apply(lambda x: x//10000)), colour='red', desc=f'{model.name} Inferencing & Predicting')
-    
-    #for g in T_bar: # rolling train
-        #T_bar.set_postfix({'Year': g[0]})
-        #model.train_model()
-        
-        #for m in g[1].to_list():
-            #inference_result.append(model.inference(m)) # T * N * m
-            #if not len(model.omit_char):
-                #predict_result.append(model.predict(m))
-        # model refit (change train period and valid period)
-        #model.refit()
-    
-    #if not len(model.omit_char):
-        #inference_result = pd.DataFrame(inference_result, index=test_mons, columns=CHARAS_LIST)
-        #inference_result.to_csv(f'results/inference/{model.name}_inference.csv')
-        #predict_result = pd.DataFrame(predict_result, index=test_mons, columns=CHARAS_LIST)
-        #predict_result.to_csv(f'results/predict/{model.name}_predict.csv')
-    
-    #return inference_result
-    
     
     
 def model_inference_and_predict_CA(model):
@@ -205,80 +172,53 @@ def git_push(msg):
 
 
 def model_selection(model_type, model_K, omit_char=[]):
-    assert model_type in ['seq2seq1', 'seq2seq2', 'seq2seq3', 'CA1', 'CA2', 'CA3'],f'No Such Model: {model_type}'
+    assert model_type in ['seq2seq1', 'seq2seq3','CA2'],f'No Such Model: {model_type}'
     
-    #if model_type == 'FF':
+
+    #if model_type == 'CA1':
         #return {
-            #'name': f'FF_{model_K}',
-            #'omit_char': [],
-            #'model': FF(K=model_K)
-        #}
-            
-    #elif model_type == 'PCA':
-        #return {
-            #'name': f'PCA_{model_K}',
+            #'name': f'CA1_{model_K}',
             #'omit_char': omit_char,
-            #'model': PCA(K=model_K, omit_char=omit_char)
+            #'model': CA1(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
         #}
-        
-    #elif model_type == 'IPCA':
-        #return {
-            #'name': f'IPCA_{model_K}',
-            #'omit_char': omit_char,
-            #'model': IPCA(K=model_K, omit_char=omit_char)
-        #}
-        
-    #elif model_type == 'CA0':
-        #return {
-            #'name': f'CA0_{model_K}',
-            #'omit_char': omit_char,
-            #'model': CA0(hidden_size=model_K, lr=CA_LR, omit_char=omit_char)
-        #}
-            
-    if model_type == 'CA1':
-        return {
-            'name': f'CA1_{model_K}',
-            'omit_char': omit_char,
-            'model': CA1(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
-        } 
     
-    elif model_type == 'CA2':
+    if model_type == 'CA2':
         return {
             'name': f'CA2_{model_K}',
             'omit_char': omit_char,
             'model': CA2(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
-        } 
-    elif model_type == 'CA3':
-        return {
-            'name': f'CA3_{model_K}',
-            'omit_char': omit_char,
-            'model': CA3(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
-        } 
+        }
+    #elif model_type == 'CA3':
+        #return {
+            #'name': f'CA3_{model_K}',
+            #'omit_char': omit_char,
+            #'model': CA3(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
+        #}
 
+    #elif model_type == 'seq2seq1':
+       # return {
+            #'name': f'seq2seq1_{model_K}',
+            #'omit_char': omit_char,
+            #'model': seq2seq1(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
+        #}
     elif model_type == 'seq2seq1':
         return {
             'name': f'seq2seq1_{model_K}',
             'omit_char': omit_char,
             'model': seq2seq1(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
         } 
-    elif model_type == 'seq2seq2':
-        return {
-            'name': f'seq2seq2_{model_K}',
-            'omit_char': omit_char,
-            'model': seq2seq2(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
-        } 
     else:
         return {
             'name': f'seq2seq3_{model_K}',
             'omit_char': omit_char,
-            'model': seq2seq3(hidden_size=model_K, dropout=CA_DR, lr=CA_LR, omit_char=omit_char)
+            'model': seq2seq3(hidden_size=model_K, dropout=CA_DR, lr=0.01, omit_char=omit_char)
         } 
         
  
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--Model', type=str, default='seq2seq1 seq2seq2 seq2seq3 CA1 CA2 CA3')
+    parser.add_argument('--Model', type=str, default='seq2seq1 seq2seq3 CA2')
     parser.add_argument('--K', type=str, default='1 2 3 4 5')
     parser.add_argument('--omit_char', type=str, default='')
 
